@@ -1,16 +1,25 @@
-import argparse
 import asyncio
-from openai import OpenAI
 from typing import Optional
+from typing import Any, Dict, List, Optional
 from contextlib import AsyncExitStack
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
+import json
+import os 
 
+load_dotenv()
+
+api_key = os.getenv("OPENAI_API_KEY")
+print(api_key)
 
 class MCPClient:
     def __init__(self):
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
+        self.openai_client = AsyncOpenAI(api_key=api_key)
+
 
     async def connect_to_streamable_http_server(
         self, server_url: str, headers: Optional[dict] = None
@@ -24,9 +33,87 @@ class MCPClient:
 
         await self.session.initialize()
         
-    async def process_query(self, query: str) -> str:
-        return query
+    async def get_mcp_tools(self) -> List[Dict[str, Any]]:
+        """Get available tools from the MCP server in OpenAI format.
 
+        Returns:
+            A list of tools in OpenAI format.
+        """
+        tools_result = await self.session.list_tools()
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
+                },
+            }
+            for tool in tools_result.tools
+        ]
+        
+    async def process_query(self, query: str) -> str:
+        """Process a query using OpenAI and available MCP tools.
+
+        Args:
+            query: The user query.
+
+        Returns:
+            The response from OpenAI.
+        """
+        # Get available tools
+        tools = await self.get_mcp_tools()
+        
+        print(f"Using tools: {tools}")
+        
+        # Initial OpenAI API call
+        response = await self.openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": query}],
+            tools=tools,
+            tool_choice="auto",
+        )
+
+        # Get assistant's response
+        assistant_message = response.choices[0].message
+
+        # Initialize conversation with user query and assistant response
+        messages = [
+            {"role": "user", "content": query},
+            assistant_message,
+        ]
+
+        # Handle tool calls if present
+        if assistant_message.tool_calls:
+            # Process each tool call
+            for tool_call in assistant_message.tool_calls:
+                # Execute tool call
+                result = await self.session.call_tool(
+                    tool_call.function.name,
+                    arguments=json.loads(tool_call.function.arguments),
+                )
+
+                # Add tool response to conversation
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result.content[0].text,
+                    }
+                )
+
+            # Get final response from OpenAI with tool results
+            final_response = await self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+                tool_choice="none",  # Don't allow more tool calls
+            )
+
+            return final_response.choices[0].message.content
+
+        # No tool calls, just return the direct response
+        return assistant_message.content
 
     async def chat_loop(self):
         print("Connected to MCP server. You can start chatting!")

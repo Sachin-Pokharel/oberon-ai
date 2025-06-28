@@ -117,6 +117,11 @@ class MCPClient:
 
     async def chat_loop(self):
         print("Connected to MCP server. You can start chatting!")
+        # List available tools
+        tools_result = await self.session.list_tools()
+        print("\nConnected to server with tools:")
+        for tool in tools_result.tools:
+            print(f"  - {tool.name}: {tool.description}")
         while True:
             try:
                 user_input = input("You: ").strip()

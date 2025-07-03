@@ -26,6 +26,3 @@ async def main():
         for result in results[:3]:  # Show first 3 results
             print(f"URL: {result.url}")
             print(f"Depth: {result.metadata.get('depth', 0)}")
-
-if __name__ == "__main__":
-    asyncio.run(main())

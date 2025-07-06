@@ -7,19 +7,17 @@ from mcp.client.streamable_http import streamablehttp_client
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 import json
-import os 
+import os
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
-print(api_key)
 
 class MCPClient:
     def __init__(self):
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.openai_client = AsyncOpenAI(api_key=api_key)
-
 
     async def connect_to_streamable_http_server(
         self, server_url: str, headers: Optional[dict] = None
@@ -32,7 +30,7 @@ class MCPClient:
         self.session: ClientSession = await self._session_context.__aenter__()
 
         await self.session.initialize()
-        
+
     async def get_mcp_tools(self) -> List[Dict[str, Any]]:
         """Get available tools from the MCP server in OpenAI format.
 
@@ -51,7 +49,7 @@ class MCPClient:
             }
             for tool in tools_result.tools
         ]
-        
+
     async def process_query(self, query: str) -> str:
         """Process a query using OpenAI and available MCP tools.
 
@@ -63,9 +61,9 @@ class MCPClient:
         """
         # Get available tools
         tools = await self.get_mcp_tools()
-        
+
         print(f"Using tools: {tools}")
-        
+
         # Initial OpenAI API call
         response = await self.openai_client.chat.completions.create(
             model="gpt-4o-mini",
@@ -76,7 +74,7 @@ class MCPClient:
 
         # Get assistant's response
         assistant_message = response.choices[0].message
-
+        
         # Initialize conversation with user query and assistant response
         messages = [
             {"role": "user", "content": query},
@@ -92,7 +90,7 @@ class MCPClient:
                     tool_call.function.name,
                     arguments=json.loads(tool_call.function.arguments),
                 )
-
+                
                 # Add tool response to conversation
                 messages.append(
                     {
@@ -110,6 +108,7 @@ class MCPClient:
                 tool_choice="none",  # Don't allow more tool calls
             )
 
+            # Return the content of the final assistant message, not just the content string
             return final_response.choices[0].message.content
 
         # No tool calls, just return the direct response
@@ -131,15 +130,14 @@ class MCPClient:
                 print(f"Bot: {response}")
             except Exception as e:
                 print(f"Error: {e}")
-                
-    
+
     async def cleanup(self):
         if self._session_context:
             await self._session_context.__aexit__(None, None, None)
         if self._streams_context:
             await self._streams_context.__aexit__(None, None, None)
-            
-            
+
+
 async def main():
     client = MCPClient()
     try:
@@ -148,6 +146,6 @@ async def main():
         await client.chat_loop()
     finally:
         await client.cleanup()
-        
+
 if __name__ == "__main__":
     asyncio.run(main())

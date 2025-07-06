@@ -1,5 +1,11 @@
 import argparse
 import uvicorn
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from tools.get_weather import get_weather_from_api
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP(
@@ -8,11 +14,12 @@ mcp = FastMCP(
     stateless_http=False
 )
 
-# Add a simple calculator
 @mcp.tool()
-def add(a: int, b: int) -> int:
-    """Add two integers together."""
-    return a + b
+def weather(query: str) -> dict:
+    """
+    MCP tool to get weather information for a given location query.
+    """
+    return get_weather_from_api(query)
 
 
 if __name__ == "__main__":

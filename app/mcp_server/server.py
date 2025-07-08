@@ -6,11 +6,12 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from tools.get_weather import get_weather_from_api
+from tools.search_engine import google_search
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP(
     name="oberon-ai",
-    json_reponse=False,
+    json_response=False,
     stateless_http=False
 )
 
@@ -20,6 +21,13 @@ def weather(query: str) -> dict:
     MCP tool to get weather information for a given location query.
     """
     return get_weather_from_api(query)
+
+@mcp.tool()
+def search(query: str) -> dict:
+    """
+    MCP tool to perform a Google search for a given query.
+    """
+    return google_search(query)
 
 
 if __name__ == "__main__":
